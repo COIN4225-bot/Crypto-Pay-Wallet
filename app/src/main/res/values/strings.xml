@@ -1,0 +1,16 @@
+<resources>
+    <string name="app_name">CryptoPay Wallet</string>
+    <string name="nav_home">Home</string>
+    <string name="nav_trade">Trade</string>
+    <string name="nav_wallet">Wallet</string>
+    <string name="nav_history">History</string>
+    <string name="nav_profile">Profile</string>
+    <string name="sign_in_google">Sign in with Google</string>
+    <string name="action_buy">Buy</string>
+    <string name="action_sell">Sell</string>
+    <string name="action_send">Send</string>
+    <string name="action_receive">Receive</string>
+    <string name="copy_address">Copy Address</string>
+    <string name="share_address">Share</string>
+    <string name="sign_out">Sign Out</string>
+</resources>

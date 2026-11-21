@@ -1,0 +1,6 @@
+{
+  "name": "CryptoPay Wallet",
+  "description": "A modern dark-themed crypto wallet app with Google Sign-In, live portfolio dashboard, buy/sell trading, P2P transfers, QR receive, and transaction history powered by Firebase.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

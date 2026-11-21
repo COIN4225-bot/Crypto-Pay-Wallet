@@ -1,0 +1,179 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidUser(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.name is string && data.name.size() >= 1 && data.name.size() <= 100 &&
+             data.email is string && data.email.size() >= 3 && data.email.size() <= 200 &&
+             data.walletAddress is string && data.walletAddress.size() >= 10 && data.walletAddress.size() <= 64 &&
+             (!('photoUrl' in data) || (data.photoUrl is string && data.photoUrl.size() <= 500)) &&
+             (!('favoriteCoins' in data) || (data.favoriteCoins is list && data.favoriteCoins.size() <= 5 && (data.favoriteCoins.size() == 0 || data.favoriteCoins[0] is string))) &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidPriceAlert(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.coin in ['BTC', 'ETH', 'USDT', 'BNB', 'DemoCoin'] &&
+             data.direction in ['ABOVE', 'BELOW'] &&
+             data.targetPriceUsdt is number && data.targetPriceUsdt > 0 && data.targetPriceUsdt <= 100000000 &&
+             data.active is bool &&
+             data.triggeredCount is int && data.triggeredCount >= 0 && data.triggeredCount <= 1000000 &&
+             (!('lastTriggeredAt' in data) || (data.lastTriggeredAt is timestamp && data.lastTriggeredAt <= request.time)) &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidWallet(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.balance is number && data.balance >= 0 && data.balance <= 1000000000 &&
+             data.btc is number && data.btc >= 0 && data.btc <= 1000000 &&
+             data.eth is number && data.eth >= 0 && data.eth <= 10000000 &&
+             data.bnb is number && data.bnb >= 0 && data.bnb <= 100000000 &&
+             data.demoCoin is number && data.demoCoin >= 0 && data.demoCoin <= 1000000000 &&
+             data.totalBalance is number && data.totalBalance >= 0 && data.totalBalance <= 10000000000 &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isCreditOnlyWalletUpdate(oldData, newData) {
+      return newData.diff(oldData).affectedKeys().hasOnly(['balance', 'btc', 'eth', 'bnb', 'demoCoin', 'totalBalance', 'updatedAt']) &&
+             newData.balance >= oldData.balance &&
+             newData.btc >= oldData.btc &&
+             newData.eth >= oldData.eth &&
+             newData.bnb >= oldData.bnb &&
+             newData.demoCoin >= oldData.demoCoin &&
+             newData.totalBalance >= oldData.totalBalance;
+    }
+
+    function isValidTransaction(data) {
+      return data.fromUid is string && data.fromUid.size() >= 1 && data.fromUid.size() <= 128 &&
+             data.toUid is string && data.toUid.size() >= 1 && data.toUid.size() <= 128 &&
+             data.fromEmail is string && data.fromEmail.size() >= 1 && data.fromEmail.size() <= 200 &&
+             data.toEmail is string && data.toEmail.size() >= 1 && data.toEmail.size() <= 200 &&
+             data.amount is number && data.amount > 0 && data.amount <= 1000000000 &&
+             data.usdtValue is number && data.usdtValue >= 0 && data.usdtValue <= 10000000000 &&
+             data.coin in ['BTC', 'ETH', 'USDT', 'BNB', 'DemoCoin'] &&
+             data.type in ['buy', 'sell', 'transfer', 'receive'] &&
+             data.status in ['completed', 'pending', 'failed'] &&
+             data.timestamp is timestamp && data.timestamp <= request.time &&
+             (!('note' in data) || (data.note is string && data.note.size() <= 140));
+    }
+
+    // Users collection: readable by authenticated users for P2P lookup; writable only by owner
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId);
+      allow list: if isSignedIn();
+
+      allow create: if isSignedIn() &&
+                       isValidId(userId) &&
+                       request.auth.uid == userId &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().keys().hasAll(['userId', 'name', 'email', 'walletAddress', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['userId', 'name', 'email', 'walletAddress', 'photoUrl', 'favoriteCoins', 'createdAt', 'updatedAt']) &&
+                       isValidUser(incoming());
+
+      allow update: if isSignedIn() &&
+                       isValidId(userId) &&
+                       request.auth.uid == userId &&
+                       incoming().userId == existing().userId &&
+                       incoming().email == existing().email &&
+                       incoming().createdAt == existing().createdAt &&
+                       isValidUser(incoming()) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['name', 'walletAddress', 'photoUrl', 'favoriteCoins', 'updatedAt']);
+
+      allow delete: if false;
+
+      // User-scoped Price Alerts subcollection
+      match /priceAlerts/{alertId} {
+        allow get: if isSignedIn() && isValidId(alertId) && request.auth.uid == userId;
+        allow list: if isSignedIn() && request.auth.uid == userId;
+
+        allow create: if isSignedIn() &&
+                         isValidId(alertId) &&
+                         request.auth.uid == userId &&
+                         incoming().userId == request.auth.uid &&
+                         incoming().keys().hasAll(['userId', 'coin', 'direction', 'targetPriceUsdt', 'active', 'triggeredCount', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'coin', 'direction', 'targetPriceUsdt', 'active', 'triggeredCount', 'lastTriggeredAt', 'createdAt', 'updatedAt']) &&
+                         isValidPriceAlert(incoming());
+
+        allow update: if isSignedIn() &&
+                         isValidId(alertId) &&
+                         request.auth.uid == userId &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         isValidPriceAlert(incoming()) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['coin', 'direction', 'targetPriceUsdt', 'active', 'triggeredCount', 'lastTriggeredAt', 'updatedAt']);
+
+        allow delete: if isSignedIn() && isValidId(alertId) && request.auth.uid == userId;
+      }
+    }
+
+    // Wallets collection: owner full read/write; authenticated P2P sender may read & credit-only update receiver
+    match /wallets/{userId} {
+      allow get: if isSignedIn() && isValidId(userId);
+      allow list: if isSignedIn() && existing().userId == request.auth.uid;
+
+      allow create: if isSignedIn() &&
+                       isValidId(userId) &&
+                       request.auth.uid == userId &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().keys().hasAll(['userId', 'balance', 'btc', 'eth', 'bnb', 'demoCoin', 'totalBalance', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['userId', 'balance', 'btc', 'eth', 'bnb', 'demoCoin', 'totalBalance', 'updatedAt']) &&
+                       isValidWallet(incoming());
+
+      allow update: if isSignedIn() &&
+                       isValidId(userId) &&
+                       isValidWallet(incoming()) &&
+                       incoming().userId == existing().userId &&
+                       (
+                         (request.auth.uid == userId &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['balance', 'btc', 'eth', 'bnb', 'demoCoin', 'totalBalance', 'updatedAt'])) ||
+                         (request.auth.uid != userId &&
+                          isCreditOnlyWalletUpdate(existing(), incoming()))
+                       );
+
+      allow delete: if false;
+    }
+
+    // Transactions collection: immutable ledger; users read only their own sent or received transactions
+    match /transactions/{transactionId} {
+      allow get: if isSignedIn() &&
+                    isValidId(transactionId) &&
+                    (existing().fromUid == request.auth.uid || existing().toUid == request.auth.uid);
+
+      allow list: if isSignedIn() &&
+                     (existing().fromUid == request.auth.uid || existing().toUid == request.auth.uid);
+
+      allow create: if isSignedIn() &&
+                       isValidId(transactionId) &&
+                       incoming().fromUid == request.auth.uid &&
+                       incoming().keys().hasAll(['fromUid', 'toUid', 'fromEmail', 'toEmail', 'amount', 'usdtValue', 'coin', 'type', 'status', 'timestamp']) &&
+                       incoming().keys().hasOnly(['fromUid', 'toUid', 'fromEmail', 'toEmail', 'amount', 'usdtValue', 'coin', 'type', 'status', 'timestamp', 'note']) &&
+                       isValidTransaction(incoming());
+
+      allow update, delete: if false;
+    }
+  }
+}

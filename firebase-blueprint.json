@@ -1,0 +1,210 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Authenticated CryptoPay Wallet user profile, favorite coins, and P2P lookup metadata.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the user."
+        },
+        "name": {
+          "type": "string",
+          "description": "Display name of the user."
+        },
+        "email": {
+          "type": "string",
+          "description": "Google account email used for profile and P2P search."
+        },
+        "walletAddress": {
+          "type": "string",
+          "description": "Unique hexadecimal wallet address for P2P receiving and QR sharing."
+        },
+        "photoUrl": {
+          "type": "string",
+          "description": "Optional profile avatar URL."
+        },
+        "favoriteCoins": {
+          "type": "array",
+          "description": "Optional bounded list of user favorite coin symbols (up to 5)."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of account creation (FieldValue.serverTimestamp())."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of last profile update (FieldValue.serverTimestamp())."
+        }
+      },
+      "required": ["userId", "name", "email", "walletAddress", "createdAt", "updatedAt"]
+    },
+    "PriceAlert": {
+      "title": "PriceAlert",
+      "description": "User-configured coin price threshold alert stored under users/{userId}/priceAlerts.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner Firebase Auth UID."
+        },
+        "coin": {
+          "type": "string",
+          "enum": ["BTC", "ETH", "USDT", "BNB", "DemoCoin"],
+          "description": "Target coin symbol."
+        },
+        "direction": {
+          "type": "string",
+          "enum": ["ABOVE", "BELOW"],
+          "description": "Threshold crossing direction."
+        },
+        "targetPriceUsdt": {
+          "type": "number",
+          "description": "Target price threshold in USDT."
+        },
+        "active": {
+          "type": "boolean",
+          "description": "Whether the alert is currently armed."
+        },
+        "triggeredCount": {
+          "type": "integer",
+          "description": "Number of times this alert has fired."
+        },
+        "lastTriggeredAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Optional server timestamp when alert last triggered."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of alert creation."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of last update."
+        }
+      },
+      "required": ["userId", "coin", "direction", "targetPriceUsdt", "active", "triggeredCount", "createdAt", "updatedAt"]
+    },
+    "Wallet": {
+      "title": "Wallet",
+      "description": "User crypto portfolio balances stored per UID.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner Firebase Auth UID."
+        },
+        "balance": {
+          "type": "number",
+          "description": "Demo USDT stablecoin balance."
+        },
+        "btc": {
+          "type": "number",
+          "description": "Bitcoin (BTC) balance."
+        },
+        "eth": {
+          "type": "number",
+          "description": "Ethereum (ETH) balance."
+        },
+        "bnb": {
+          "type": "number",
+          "description": "BNB coin balance."
+        },
+        "demoCoin": {
+          "type": "number",
+          "description": "DemoCoin (DMC) balance."
+        },
+        "totalBalance": {
+          "type": "number",
+          "description": "Total portfolio valuation in USDT."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of last wallet mutation (FieldValue.serverTimestamp())."
+        }
+      },
+      "required": ["userId", "balance", "btc", "eth", "bnb", "demoCoin", "totalBalance", "updatedAt"]
+    },
+    "CryptoTransaction": {
+      "title": "CryptoTransaction",
+      "description": "Immutable transaction ledger entry for buy, sell, transfer, and receive actions.",
+      "type": "object",
+      "properties": {
+        "fromUid": {
+          "type": "string",
+          "description": "Sender or initiator Firebase Auth UID."
+        },
+        "toUid": {
+          "type": "string",
+          "description": "Recipient Firebase Auth UID (or own UID for buy/sell)."
+        },
+        "fromEmail": {
+          "type": "string",
+          "description": "Sender email or system label."
+        },
+        "toEmail": {
+          "type": "string",
+          "description": "Recipient email or system label."
+        },
+        "amount": {
+          "type": "number",
+          "description": "Quantity of the coin transacted."
+        },
+        "usdtValue": {
+          "type": "number",
+          "description": "USDT value at execution time."
+        },
+        "coin": {
+          "type": "string",
+          "enum": ["BTC", "ETH", "USDT", "BNB", "DemoCoin"],
+          "description": "Coin symbol."
+        },
+        "type": {
+          "type": "string",
+          "enum": ["buy", "sell", "transfer", "receive"],
+          "description": "Transaction category."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["completed", "pending", "failed"],
+          "description": "Execution status."
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of execution (FieldValue.serverTimestamp())."
+        },
+        "note": {
+          "type": "string",
+          "description": "Optional transfer note."
+        }
+      },
+      "required": ["fromUid", "toUid", "fromEmail", "toEmail", "amount", "usdtValue", "coin", "type", "status", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Stores user profile, favoriteCoins, and P2P searchable email/walletAddress."
+    },
+    "/users/{userId}/priceAlerts/{alertId}": {
+      "schema": { "$ref": "#/entities/PriceAlert" },
+      "description": "User-scoped price threshold alerts for favorite coins."
+    },
+    "/wallets/{userId}": {
+      "schema": { "$ref": "#/entities/Wallet" },
+      "description": "Stores user cryptocurrency balances."
+    },
+    "/transactions/{transactionId}": {
+      "schema": { "$ref": "#/entities/CryptoTransaction" },
+      "description": "Immutable transaction ledger scoped by fromUid and toUid."
+    }
+  }
+}
